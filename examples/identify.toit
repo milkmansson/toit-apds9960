@@ -12,19 +12,18 @@ jag run -d <device> examples/identify.toit
 ```
 */
 
-import gpio
 import i2c
 import apds9960 show *
 
 // Please set these correctly for the device in use:
-SDA-PIN ::= 8
-SCL-PIN ::= 9
+SDA-PIN ::= 21
+SCL-PIN ::= 20
 FREQUENCY ::= 400_000
 
 main:
   bus := i2c.Bus
-      --sda=(gpio.Pin SDA-PIN)
-      --scl=(gpio.Pin SCL-PIN)
+      --sda=SDA-PIN
+      --scl=SCL-PIN
       --frequency=FREQUENCY
 
   if not bus.scan.contains Apds9960.I2C-ADDRESS:

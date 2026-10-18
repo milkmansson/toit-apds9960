@@ -17,15 +17,15 @@ import apds9960 show *
 import apds9960.events show *
 
 // Please set these correctly for the device in use:
-SDA-PIN ::= 8
-SCL-PIN ::= 9
+SDA-PIN ::= 21
+SCL-PIN ::= 20
 FREQUENCY ::= 400_000
-INTERRUPT-PIN ::= 4
+INTERRUPT-PIN ::= 7
 
 main:
   bus := i2c.Bus
-      --sda=(gpio.Pin SDA-PIN)
-      --scl=(gpio.Pin SCL-PIN)
+      --sda=SDA-PIN
+      --scl=SCL-PIN
       --frequency=FREQUENCY
   driver := Apds9960 (bus.device Apds9960.I2C-ADDRESS)
 

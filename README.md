@@ -33,12 +33,11 @@ Known limits and open points:
 ## Quick start
 
 ```toit
-import gpio
 import i2c
 import apds9960 show *
 
 main:
-  bus := i2c.Bus --sda=(gpio.Pin 8) --scl=(gpio.Pin 9) --frequency=400_000
+  bus := i2c.Bus --sda=21 --scl=20 --frequency=400_000
   driver := Apds9960 (bus.device Apds9960.I2C-ADDRESS)
 
   driver.power-on
@@ -55,6 +54,8 @@ control of the desired function must be set", so the order is `power-on`, the
 setters, then `enable-*`.
 
 ## Examples
+
+The library works with Toit SDK 2.0.0-alpha.195 or newer. The examples and tests pass integer pin numbers to `i2c.Bus`, which needs alpha.196 or newer.
 
 | File | Shows |
 |---|---|
@@ -125,7 +126,7 @@ poll. For interrupt driven use, `import apds9960.events show *` provides
 MPR121 driver:
 
 ```toit
-events := Apds9960Events driver --intrpt-pin=(gpio.Pin 4 --input --pull-up)
+events := Apds9960Events driver --intrpt-pin=(gpio.Pin 7 --input --pull-up)
 events.on-gesture --callback=:: | gesture/int | print (Gesture.name-of gesture)
 events.on-proximity --callback=:: | value/int | print "close: $value"
 events.on-light --callback=:: | color/ColorData | print color

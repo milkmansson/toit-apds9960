@@ -28,12 +28,12 @@ import gpio
 import i2c
 import apds9960 show *
 
-SDA-PIN ::= 8
-SCL-PIN ::= 9
+SDA-PIN ::= 21
+SCL-PIN ::= 20
 I2C-FREQUENCY ::= 400_000
 
 /** The ESP32 pin that the module's INT pin is wired to, or null if it is not wired. */
-INT-PIN/int? ::= 4
+INT-PIN/int? ::= 7
 
 /** Set to true to run the hands-on gesture check. */
 GESTURE-TEST ::= false
@@ -60,8 +60,8 @@ check name/string condition/bool detail/string="":
 
 main:
   bus := i2c.Bus
-      --sda=(gpio.Pin SDA-PIN)
-      --scl=(gpio.Pin SCL-PIN)
+      --sda=SDA-PIN
+      --scl=SCL-PIN
       --frequency=I2C-FREQUENCY
   if not bus.scan.contains Apds9960.I2C-ADDRESS:
     print "FAIL  no device at 0x$(%02x Apds9960.I2C-ADDRESS)"
