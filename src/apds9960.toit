@@ -160,8 +160,18 @@ See the library documentation for an overview.
 class Apds9960:
   /** The only I2C address of the chip. */
   static I2C-ADDRESS ::= 0x39
-  /** The value of the ID register. */
+  /** The value of the ID register that the datasheet documents. */
   static ID-VALUE ::= 0xAB
+  /**
+  ID register values that were seen on working modules but are not in the
+    datasheet.
+
+  The only entry is 0x9E, read from a module that otherwise answered like an
+    APDS-9960 (observed once, by the author, not confirmed by any document).  The
+    constructor accepts these values with a logged warning.  It is a guess that
+    they come from clones or later revisions with the same register layout.
+  */
+  static ALTERNATE-IDS ::= [0x9E]
 
   // Register list. Addresses 0x00-0x7F are RAM.
   static REG-ENABLE_        ::= 0x80
@@ -330,9 +340,10 @@ class Apds9960:
   /**
   Constructs a driver for the given device.
 
-  Reads the ID register and throws "UNEXPECTED_DEVICE_ID" if it is not
-    $ID-VALUE.  Pass --no-verify-id to skip the check, for example for a clone
-    that reports another ID.
+  Reads the ID register.  A value of $ID-VALUE is accepted silently, and one
+    from $ALTERNATE-IDS is accepted with a warning.  Anything else throws
+    "UNEXPECTED_DEVICE_ID".  Pass --no-verify-id to skip the check, for example
+    for a clone that reports yet another ID.
 
   The constructor does not change the configuration of the chip.
   */
@@ -343,10 +354,13 @@ class Apds9960:
     if verify-id:
       id := reg_.read-u8 REG-ID_
       if id != ID-VALUE:
-        logger_.error "unexpected device id" --tags={"id": "0x$(%02x id)"}
-        throw "UNEXPECTED_DEVICE_ID"
+        if ALTERNATE-IDS.contains id:
+          logger_.warn "device id differs from the datasheet value, continuing" --tags={"id": "0x$(%02x id)", "expected": "0x$(%02x ID-VALUE)"}
+        else:
+          logger_.error "unexpected device id" --tags={"id": "0x$(%02x id)"}
+          throw "UNEXPECTED_DEVICE_ID"
 
-  /** Returns the raw content of the ID register. $ID-VALUE is expected. */
+  /** Returns the raw content of the ID register.  $ID-VALUE is expected, see also $ALTERNATE-IDS. */
   device-id -> int:
     return reg_.read-u8 REG-ID_
 

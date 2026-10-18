@@ -47,8 +47,11 @@ main:
   print driver.read-color  // clear=1200 red=400 green=500 blue=300
 ```
 
-The constructor reads the ID register and throws `UNEXPECTED_DEVICE_ID` if it
-is not 0xAB. It does not change any configuration. The datasheet asks that
+The constructor reads the ID register. The datasheet documents 0xAB. A module
+reporting 0x9E was seen working during development, and that value is accepted
+with a logged warning (`Apds9960.ALTERNATE-IDS`). Any other value throws
+`UNEXPECTED_DEVICE_ID`, and `--no-verify-id` skips the check. The constructor
+does not change any configuration. The datasheet asks that
 "Before enabling Gesture, Proximity, or ALS, all of the bits associated with
 control of the desired function must be set", so the order is `power-on`, the
 setters, then `enable-*`.

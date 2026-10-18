@@ -83,7 +83,10 @@ main:
   print "Done: $passed passed, $failed failed, $warned warnings."
 
 test-id driver/Apds9960:
-  check "ID register" driver.device-id == Apds9960.ID-VALUE "got 0x$(%02x driver.device-id)"
+  id := driver.device-id
+  if id == Apds9960.ID-VALUE: pass "ID register"
+  else if Apds9960.ALTERNATE-IDS.contains id: warn "ID register" "0x$(%02x id) is not the datasheet value 0x$(%02x Apds9960.ID-VALUE), run the remaining checks to see whether the registers behave normally"
+  else: fail "ID register" "got 0x$(%02x id)"
   driver.power-on
   check "power on" driver.powered-on
   driver.power-off

@@ -39,6 +39,8 @@ test-id:
   expect-equals 0xAB driver.device-id
   bad := MockApds9960 --id=0x12
   expect-throw "UNEXPECTED_DEVICE_ID": new-driver bad
+  // An alternate ID is accepted with a warning.
+  new-driver (MockApds9960 --id=0x9E)
   // Skipping the check works.
   Apds9960 bad --no-verify-id --logger=(log.Logger log.FATAL-LEVEL log.DefaultTarget)
 
