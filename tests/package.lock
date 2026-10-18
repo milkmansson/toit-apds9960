@@ -1,0 +1,5 @@
+prefixes:
+  apds9960: ..
+packages:
+  ..:
+    path: ..

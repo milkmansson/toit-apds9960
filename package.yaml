@@ -1,0 +1,5 @@
+name: apds9960
+description: Support for the Broadcom APDS-9960 I2C proximity, ambient light, RGB colour and gesture sensor.
+environment:
+  sdk: ^2.0.0-alpha.195
+dependencies: {}
