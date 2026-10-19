@@ -257,7 +257,15 @@ class Apds9960:
   static STATUS-PINT  ::= 0b00100000
   /** Status bit: ALS interrupt. See $status. */
   static STATUS-AINT  ::= 0b00010000
-  /** Status bit: gesture interrupt. See $status. */
+  /**
+  Status bit: gesture interrupt.  See $status.
+
+  The datasheet says the status register "is set to 0x04 at power-up", which is
+    this bit, and on the module tested during development it read 1 at all
+    times, with the gesture engine disabled.  Do not rely on it to detect
+    gesture data.  Use $Apds9960.gesture-fifo-level and
+    $Apds9960.gesture-mode-active instead.
+  */
   static STATUS-GINT  ::= 0b00000100
   /** Status bit: proximity data valid. See $status. */
   static STATUS-PVALID ::= 0b00000010
@@ -345,9 +353,13 @@ class Apds9960:
     "UNEXPECTED_DEVICE_ID".  Pass --no-verify-id to skip the check, for example
     for a clone that reports yet another ID.
 
-  The constructor does not change the configuration of the chip.
+  The chip keeps its register values when a program ends, so a program that
+    starts after another one finds the earlier settings in place.  An engine left
+    enabled can disturb the next program, see $reset-registers.  By default the
+    constructor therefore calls $reset-registers.  Pass --no-reset to leave the
+    chip as it is, for example to attach to a running sensor.
   */
-  constructor dev/serial.Device --logger/log.Logger=log.default --verify-id/bool=true:
+  constructor dev/serial.Device --logger/log.Logger=log.default --verify-id/bool=true --reset/bool=true:
     dev_ = dev
     reg_ = dev.registers
     logger_ = logger.with-name "apds9960"
@@ -359,10 +371,75 @@ class Apds9960:
         else:
           logger_.error "unexpected device id" --tags={"id": "0x$(%02x id)"}
           throw "UNEXPECTED_DEVICE_ID"
+    if reset: reset-registers
 
   /** Returns the raw content of the ID register.  $ID-VALUE is expected, see also $ALTERNATE-IDS. */
   device-id -> int:
     return reg_.read-u8 REG-ID_
+
+  /**
+  Restores the register values that the datasheet lists for power-up.
+
+  Switches every engine and every interrupt off, leaves gesture mode, empties
+    the gesture FIFO, clears pending interrupts and writes the datasheet's
+    reset values to the configuration registers.  The chip ends up with power
+    off, as after a power cycle.  The datasheet describes no software reset, so
+    this is done register by register.
+
+  Reserved bits are left alone, with two exceptions: the reserved bit of
+    CONFIG2 and the proximity and gesture pulse registers are written with
+    their listed reset values 0x01, 0x40 and 0x40.  The ALS low threshold has no
+    listed reset value and is set to 0.
+
+  # Why
+  The chip keeps its settings between program runs.  The datasheet says that
+    "the Gesture engine is entered when its enable bit, GEN, and the operating
+    mode bit, GMODE, are both set", and that GMODE "becomes set when proximity
+    results, PDATA, is greater or equal to the gesture proximity entry
+    threshold, GPENTH".  A gesture example that ran earlier leaves GEN and a
+    nonzero GPENTH behind.  The next program then finds the proximity and ALS
+    engines frozen whenever the proximity value reaches that threshold, because
+    the gesture engine has taken over the cycle.
+  */
+  reset-registers -> none:
+    reg_.write-u8 REG-ENABLE_ 0
+    reg_.write-u8 REG-GCONF4_ GCONF4-FIFO-CLR_  // Also clears GMODE and GIEN.
+    reg_.write-u8 REG-ADC-TIME_ 0xFF
+    reg_.write-u8 REG-WAIT-TIME_ 0xFF
+    reg_.write-u16-le REG-ALS-LOW_ 0
+    reg_.write-u16-le REG-ALS-HIGH_ 0
+    reg_.write-u8 REG-PROX-LOW_ 0
+    reg_.write-u8 REG-PROX-HIGH_ 0
+    reg_.write-u8 REG-PERS_ 0
+    set-bit_ REG-CONFIG1_ CONFIG1-WLONG_ false
+    reg_.write-u8 REG-PPULSE_ 0x40
+    reg_.write-u8 REG-CONTROL_ 0
+    reg_.write-u8 REG-CONFIG2_ 0x01
+    reg_.write-u8 REG-POFFSET-UR_ 0
+    reg_.write-u8 REG-POFFSET-DL_ 0
+    reg_.write-u8 REG-CONFIG3_ 0
+    reg_.write-u8 REG-GPENTH_ 0
+    reg_.write-u8 REG-GEXTH_ 0
+    reg_.write-u8 REG-GCONF1_ 0
+    reg_.write-u8 REG-GCONF2_ 0
+    reg_.write-u8 REG-GOFFSET-U_ 0
+    reg_.write-u8 REG-GOFFSET-D_ 0
+    reg_.write-u8 REG-GOFFSET-L_ 0
+    reg_.write-u8 REG-GOFFSET-R_ 0
+    reg_.write-u8 REG-GPULSE_ 0x40
+    reg_.write-u8 REG-GCONF3_ 0
+    reg_.write-u8 REG-GCONF4_ 0
+    clear-all-interrupts
+
+  /**
+  Reads a raw register, for diagnostics.
+
+  The $register is an address from the datasheet's register map.  Note that
+    reading some registers has side effects, for example the proximity data
+    register clears the proximity valid flag.
+  */
+  read-register register/int -> int:
+    return reg_.read-u8 register
 
   // Power and engine enables.
 
@@ -664,7 +741,11 @@ class Apds9960:
   als-interrupt-pending -> bool:
     return get-bit_ REG-STATUS_ STATUS-AINT
 
-  /** Whether the gesture interrupt flag is set. */
+  /**
+  Whether the gesture interrupt flag is set.
+
+  See $STATUS-GINT for why this flag is unreliable at rest.
+  */
   gesture-interrupt-pending -> bool:
     return get-bit_ REG-STATUS_ STATUS-GINT
 

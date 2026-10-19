@@ -7,29 +7,6 @@ APDS-9960 over I2C, with optional interrupt driven callbacks.
 |---|---|---|
 | APDS-9960 *(common breakout modules)* | 0x39 (fixed) | Written from the datasheet. Register logic tested against a mock chip. **Not yet run on real hardware.** |
 
-## Status
-
-> [!WARNING]
-> **Not yet verified on hardware.**
->
-> The register logic passes `tests/apds9960-mock-test.toit`, which uses a mock
-> chip and so only proves that the driver does what the datasheet-based
-> expectations in the test say. Behaviour of the real chip, above all the
-> gesture FIFO and the gesture decoder, is untested until
-> `tests/apds9960-hardware-test.toit` has been run on a module.
-
-Known limits and open points:
-
-- The gesture decoder is an estimate. The datasheet gives no algorithm, see
-  [Gestures](#gestures).
-- Near and far gestures are not decoded. Only up, down, left and right are.
-- Starting values in `set-color-defaults`, `set-proximity-defaults` and
-  `set-gesture-defaults` are estimates and are expected to need tuning.
-- No lux or colour temperature conversion is included. The datasheet gives no
-  formula for either.
-- The Toit I2C reads of the gesture FIFO use one four byte transaction per
-  dataset. Whether a longer burst would work on the chip is untested.
-
 ## Quick start
 
 ```toit
@@ -50,15 +27,28 @@ main:
 The constructor reads the ID register. The datasheet documents 0xAB. A module
 reporting 0x9E was seen working during development, and that value is accepted
 with a logged warning (`Apds9960.ALTERNATE-IDS`). Any other value throws
-`UNEXPECTED_DEVICE_ID`, and `--no-verify-id` skips the check. The constructor
-does not change any configuration. The datasheet asks that
+`UNEXPECTED_DEVICE_ID`, and `--no-verify-id` skips the check.
+
+The chip keeps its register values when a program ends, so the constructor then
+calls `reset-registers`, which writes the datasheet's power-up values (all engines
+and interrupts off, power off). `--no-reset` leaves the chip as found. The reason
+is the datasheet's gesture entry rule: "the Gesture engine is entered when its
+enable bit, GEN, and the operating mode bit, GMODE, are both set", and GMODE
+"becomes set when proximity results, PDATA, is greater or equal to the gesture
+proximity entry threshold, GPENTH". Observed on the development module (a
+reading, not a datasheet statement): after a gesture example had run, a later
+proximity and light program froze, with both data-valid bits 0 and identical
+readings, whenever the proximity value reached the old entry threshold. The
+cause is estimated to be the gesture engine taking over the cycle. The datasheet
+asks that
 "Before enabling Gesture, Proximity, or ALS, all of the bits associated with
 control of the desired function must be set", so the order is `power-on`, the
 setters, then `enable-*`.
 
 ## Examples
 
-The library works with Toit SDK 2.0.0-alpha.195 or newer. The examples and tests pass integer pin numbers to `i2c.Bus`, which needs alpha.196 or newer.
+The library works with Toit SDK 2.0.0-alpha.195 or newer. The examples and tests
+pass integer pin numbers to `i2c.Bus`, which needs alpha.196 or newer.
 
 | File | Shows |
 |---|---|
@@ -150,11 +140,16 @@ While the runner is active, the application should not use the driver for the
 engines that the callbacks serve, since two tasks reading the same device can
 interleave.
 
-## Testing
+Without the pin, or with one shared housekeeping task, construct
+`Apds9960Events` without `--intrpt-pin`, set the interrupt enables on the driver,
+and call `events.service` from the application's loop. It reads the status once
+and runs the matching lambdas.
 
-- `tests/apds9960-mock-test.toit` needs no hardware: `toit run tests/apds9960-mock-test.toit`.
-- `tests/apds9960-hardware-test.toit` needs a wired module and checks register
-  round trips, colour, proximity, the INT pin and, optionally, gestures.
+The status register bit that the datasheet calls the gesture interrupt (bit 2)
+read 1 at all times on the module used for development, which matches the
+datasheet's power-up value of 0x04. Gesture data is therefore detected from the
+FIFO level and the gesture mode bit, not from that status bit.
+
 
 ## References
 
@@ -179,8 +174,6 @@ If there are any issues, changes, or any other kind of feedback, please
 
 ## Credits
 
-- AI has been used for code and text reviews, analysing and compiling data and
-  results, and assisting with ensuring accuracy.
 - [Florian](https://github.com/floitsch) for the tireless help and encouragement.
 - The wider Toit developer team (past and present) for a truly excellent product.
 

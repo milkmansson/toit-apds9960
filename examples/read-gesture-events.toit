@@ -2,6 +2,11 @@
 // Use of this source code is governed by a Zero-Clause BSD license that can
 // be found in the EXAMPLES_LICENSE file.
 
+import gpio
+import i2c
+import apds9960 show *
+import apds9960.events show *
+
 /**
 Detects hand swipes with the INT pin and a callback.
 
@@ -10,11 +15,6 @@ The $Apds9960Events class waits for the sensor's INT pin on its own task and
   $INTERRUPT-PIN.  The pin is open drain and active low, so it needs a pull-up,
   which this example turns on in the ESP32.
 */
-
-import gpio
-import i2c
-import apds9960 show *
-import apds9960.events show *
 
 // Please set these correctly for the device in use:
 SDA-PIN ::= 21

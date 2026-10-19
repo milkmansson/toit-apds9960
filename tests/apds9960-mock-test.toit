@@ -13,13 +13,18 @@ Needs no hardware.  Run with `toit run tests/apds9960-mock-test.toit` from the
 import expect show *
 import log
 import apds9960 show *
+import apds9960.events show *
 import .mock-apds9960
 
 new-driver mock/MockApds9960 -> Apds9960:
-  return Apds9960 mock --logger=(log.Logger log.FATAL-LEVEL log.DefaultTarget)
+  driver := Apds9960 mock --logger=(log.Logger log.FATAL-LEVEL log.DefaultTarget)
+  // The constructor clears interrupts as part of the reset.
+  mock.commands.clear
+  return driver
 
 main:
   test-id
+  test-reset
   test-enable-bits
   test-timing
   test-fields
@@ -31,6 +36,7 @@ main:
   test-gesture-fifo
   test-gesture-collect
   test-decoder
+  test-events
   print "All mock tests passed."
 
 test-id:
@@ -314,3 +320,96 @@ test-decoder:
   expect-throw "INVALID_ARGUMENT": GestureDecoder --rotation=45
   expect-equals "up" (Gesture.name-of Gesture.UP)
   expect-equals "none" (Gesture.name-of null)
+
+test-events:
+  mock := MockApds9960
+  driver := new-driver mock
+  events := Apds9960Events driver --logger=(log.Logger log.FATAL-LEVEL log.DefaultTarget)
+  proximities := []
+  colors := []
+  gestures := []
+  events.on-proximity --callback=:: | value | proximities.add value
+  events.on-light --callback=:: | color | colors.add color
+  events.on-gesture --callback=:: | gesture | gestures.add gesture
+  expect-throw "NO_INTERRUPT_PIN": events.start
+
+  // The chip reads 0x04 at rest, which is the GINT bit.  Nothing happens.
+  mock.memory[0x93] = 0x04
+  events.service
+  expect proximities.is-empty
+  expect colors.is-empty
+  expect gestures.is-empty
+  expect mock.commands.is-empty
+
+  // A proximity interrupt runs the lambda and clears the interrupt.
+  mock.memory[0x93] = 0x04 | Apds9960.STATUS-PINT
+  mock.memory[0x9C] = 200
+  events.service
+  expect-equals [200] proximities
+  expect-equals [0xE7] mock.commands
+
+  // A light interrupt runs the lambda with the colour data.
+  mock.commands.clear
+  mock.memory[0x93] = 0x04 | Apds9960.STATUS-AINT
+  mock.memory[0x94] = 0x34
+  mock.memory[0x95] = 0x12
+  events.service
+  expect-equals 1 colors.size
+  expect-equals 0x1234 colors[0].clear
+  expect-equals [0xE7] mock.commands
+
+  // Gesture data in the FIFO is collected and decoded.
+  mock.commands.clear
+  mock.memory[0x93] = 0x04
+  mock.memory[0xAB] = 0x01
+  data := make-data [30, 120, 80, 80] [120, 30, 80, 80]
+  mock.fifo = List 4: data[it * 4..(it + 1) * 4]
+  events.service
+  expect-equals [Gesture.DOWN] gestures
+
+test-reset:
+  // A chip left in a busy state by an earlier program, with the gesture
+  // engine on, thresholds set and a gesture running.
+  mock := MockApds9960
+  mock.memory[0x80] = 0x77
+  mock.memory[0xA0] = 40
+  mock.memory[0xA1] = 30
+  mock.memory[0xA2] = 0x41
+  mock.memory[0xA3] = 0x41
+  mock.memory[0xA6] = 0xC9
+  mock.memory[0xAB] = 0b11
+  mock.memory[0x81] = 219
+  mock.memory[0x8D] = 0x42
+  mock.memory[0x8F] = 0xFF
+  mock.memory[0x90] = 0xF1
+  mock.memory[0x9F] = 0x3F
+  mock.memory[0x86] = 0xCD
+  mock.memory[0x9D] = 0x85
+  mock.fifo = [#[1, 2, 3, 4]]
+  driver := Apds9960 mock --logger=(log.Logger log.FATAL-LEVEL log.DefaultTarget)
+  // The constructor reset the registers and cleared the interrupts.
+  expect-equals 0 mock.memory[0x80]
+  expect-not driver.gesture-enabled
+  expect-not driver.powered-on
+  expect-equals 0 mock.memory[0xA0]
+  expect-equals 0 mock.memory[0xA1]
+  expect-equals 0 mock.memory[0xA2]
+  expect-equals 0 mock.memory[0xA3]
+  expect-equals 0x40 mock.memory[0xA6]
+  expect-equals 0 mock.memory[0xAB]
+  expect-equals 0xFF mock.memory[0x81]
+  expect-equals 0x40 mock.memory[0x8D]  // The reserved bit stays, wait long is off.
+  expect-equals 0 mock.memory[0x8F]
+  expect-equals 0x01 mock.memory[0x90]
+  expect-equals 0 mock.memory[0x9F]
+  expect-equals 0 mock.memory[0x86]
+  expect-equals 0 mock.memory[0x9D]
+  expect mock.fifo.is-empty
+  expect-equals [0xE7] mock.commands
+
+  // Without the reset the chip is left as found.
+  mock2 := MockApds9960
+  mock2.memory[0x80] = 0x77
+  Apds9960 mock2 --no-reset --logger=(log.Logger log.FATAL-LEVEL log.DefaultTarget)
+  expect-equals 0x77 mock2.memory[0x80]
+  expect mock2.commands.is-empty

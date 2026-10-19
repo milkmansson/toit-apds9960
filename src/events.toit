@@ -40,7 +40,7 @@ events.start
 */
 class Apds9960Events:
   driver_/Apds9960
-  pin_/gpio.Pin
+  pin_/gpio.Pin?
   decoder_/GestureDecoder
   logger_/log.Logger
   runner_/Task? := null
@@ -52,8 +52,11 @@ class Apds9960Events:
   Constructs the events for the given $driver, using the INT pin $intrpt-pin.
 
   The $decoder defaults to a $GestureDecoder with its default settings.
+
+  Without an $intrpt-pin, $start is not available, and the application calls
+    $service from its own loop instead.
   */
-  constructor driver/Apds9960 --intrpt-pin/gpio.Pin --decoder/GestureDecoder?=null --logger/log.Logger=log.default:
+  constructor driver/Apds9960 --intrpt-pin/gpio.Pin?=null --decoder/GestureDecoder?=null --logger/log.Logger=log.default:
     driver_ = driver
     pin_ = intrpt-pin
     decoder_ = decoder or GestureDecoder
@@ -94,10 +97,12 @@ class Apds9960Events:
   /**
   Enables the interrupts that have lambdas and starts the runner task.
 
-  Does nothing if already running.
+  Does nothing if already running.  Throws "NO_INTERRUPT_PIN" if the events
+    were constructed without a pin.
   */
   start -> none:
     if running: return
+    if pin_ == null: throw "NO_INTERRUPT_PIN"
     if gesture-callback_: driver_.enable-gesture-interrupt
     else: driver_.disable-gesture-interrupt
     if proximity-callback_: driver_.enable-proximity-interrupt
@@ -118,15 +123,28 @@ class Apds9960Events:
     driver_.clear-all-interrupts
 
   run_ -> none:
+    pin := pin_
     while true:
-      pin_.wait-for 0
-      service_
+      pin.wait-for 0
+      service
       // Avoid spinning if something keeps the line low.
-      if pin_.get == 0: sleep --ms=5
+      if pin.get == 0: sleep --ms=5
 
-  service_ -> none:
+  /**
+  Checks the sensor once and runs the lambdas that match what it finds.
+
+  Called by the runner task whenever the INT pin goes low.  An application
+    that does not use the pin, or prefers one shared housekeeping task, can call
+    it from its own loop instead.  The interrupt enables still have to be set,
+    which $start does and which the application does itself otherwise.
+
+  A gesture is recognized by data in the gesture FIFO or by the gesture engine
+    running, and not by the gesture interrupt status bit, see
+    $Apds9960.STATUS-GINT.
+  */
+  service -> none:
     status := driver_.status
-    if (status & Apds9960.STATUS-GINT) != 0 and gesture-callback_:
+    if gesture-callback_ and (driver_.gesture-mode-active or driver_.gesture-fifo-level > 0):
       data := driver_.collect-gesture-data --timeout=(Duration --ms=500)
       if data != null and data.size > 0:
         gesture := decoder_.decode data

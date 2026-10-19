@@ -2,6 +2,11 @@
 // Use of this source code is governed by a Zero-Clause BSD license that can
 // be found in the EXAMPLES_LICENSE file.
 
+import gpio
+import i2c
+import apds9960 show *
+import apds9960.events show *
+
 /**
 Uses the proximity and light threshold interrupts.
 
@@ -15,12 +20,7 @@ Here the proximity callback runs when an object comes closer than a value of
   the range $LIGHT-LOW to $LIGHT-HIGH.
 */
 
-import gpio
-import i2c
-import apds9960 show *
-import apds9960.events show *
-
-// Please set these correctly for the device in use:
+// Set these correctly for the device in use:
 SDA-PIN ::= 21
 SCL-PIN ::= 20
 FREQUENCY ::= 400_000
