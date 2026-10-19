@@ -3,10 +3,6 @@
 Reads ambient light and RGB colour, proximity, and hand gestures from the
 APDS-9960 over I2C, with optional interrupt driven callbacks.
 
-| Chip | I2C address | Status |
-|---|---|---|
-| APDS-9960 *(common breakout modules)* | 0x39 (fixed) | Written from the datasheet. Register logic tested against a mock chip. **Not yet run on real hardware.** |
-
 ## Quick start
 
 ```toit
